@@ -127,3 +127,4 @@ NOTE: The OFFLINE version will NOT work, sorry i was sick a made a mistake.
 ## Disclaimer
 
 This tool is provided for educational and research purposes only. The authors are not responsible for any misuse of this software or damage to devices. Ensure you have authorization before performing operations on any device.
+https://buymeacoffee.com/rust505
